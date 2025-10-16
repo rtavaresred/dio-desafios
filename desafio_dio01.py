@@ -3,9 +3,11 @@ import time
 
 # CONFIGURAÇÕES GERAIS
 
-BANCO_NAME = "Banco Crowex"
+BANCO_VERSION = "v0.1.2"
+BANCO_NAME = "Banco Dio"
 AGENCIA = "0001"
-BANCO_VERSION = "v0.1.1"
+TENTATIVAS_SENHA = 3
+LIMITE_SAQUES = 3
 
 # VARIÁVEIS DO SISTEMA
 
@@ -13,6 +15,7 @@ usuarios = []
 contas = []
 
 input_geral = "Digite a opção desejada > "
+saques_realizados = 0 
 
 # FUNÇÕES
 
@@ -36,7 +39,7 @@ def menu_principal():
     print("[1] Criar Usuário")
     print("[2] Abrir Conta")
     print("[3] Listar Contas")
-    print("[4] Entrar na Conta")
+    print("[4] Acessar Conta")
     print("[0] Sair do Sistema")
     print()
     print(line())
@@ -133,8 +136,90 @@ def listar_contas():
 
     input("\nPressione [ENTER] para continuar...")
 
+def selecionar_conta(usuario):
+    contas_usuario = [c for c in contas if c["usuario"] == usuario]
+
+    if not contas_usuario:
+        print("❌ Nenhuma conta encontrada. Crie uma conta primeiro.")
+        input("\nPressione [ENTER] para continuar...")
+        return None
+    
+    if len(contas_usuario) == 1:
+        return contas_usuario[0]
+    
+    print(line('SELECIONAR UMA CONTA'))
+    print("\nUsuário possui várias contas,\nselecione uma conta para entrar:\n")
+
+    for i, conta in enumerate(contas_usuario, 1):
+        print(f"[{i}] Agência {conta['agencia']} - Conta {conta['numero']}")
+    print()
+    escolha = int(input("Escolha a conta: "))
+    return contas_usuario[escolha - 1] if 1 <= escolha <= len(contas_usuario) else None
+
+def menu_conta(usuario, conta):
+    print(line(f"Agência: {conta['agencia']} | Conta: {conta['numero']}"))
+    print(line(f'{usuario['nome'].upper()}',simbolo=' '))
+    print()
+    print("[1] Exibir Extrato")
+    print("[2] Depositar")
+    print("[3] Sacar")
+    print("[0] Sair da Conta\n")
+    print(line())
+    return input("Digite a opção desejada > ")
+
+def exibir_extrato(conta):
+    print(line(F"EXTRATO"))
+    print()
+    print(f"👤 Usuário: {conta['usuario']['nome']}")
+    print(f"🏦 Agência: {conta['agencia']}")
+    print(f"💳 Conta: {conta['numero']}")
+    print(line(simbolo='-'))
+    if not conta["extrato"]:
+        print("Nenhuma movimentação.")
+    else:
+        for mov in conta["extrato"]:
+            print(mov)
+    print(line(simbolo='-'))
+    print(f"💰 Saldo atual: R$ {conta['saldo']:.2f}")
+    print(line())
+    input("\nPressione [ENTER] para continuar...")
+
+def depositar(conta):
+    valor = input("Informe o valor: ").replace(",", ".")
+    valor = float(valor)
+    if valor <= 0:
+        print("❌ Valor inválido.")
+        input("\nPressione [ENTER] para continuar...")
+        return
+    
+    conta['saldo'] += valor
+    conta['extrato'].append(f"➕ Crédito: R$ {valor:.2f}")
+
+    print(f"\n✅ Depósito de R$ {valor:.2f} realizado com sucesso!")
+    time.sleep(2)
+    
+def sacar(conta):
+    valor = input("Informe o valor: ").replace(",", ".")
+    valor = float(valor)
+    if valor <= 0:
+        print("❌ Valor inválido.")
+        time.sleep(2)
+        return
+    
+    if valor > conta['saldo']:
+        print('🚫 Saldo insuficiente.')
+        time.sleep(2)
+        return
+    
+    conta['saldo'] -= valor
+    conta['extrato'].append(f"➖ Débito:  R$ {valor:.2f}")
+
+    print(f"\n✅ Saque de R$ {valor:.2f} realizado com sucesso!")
+    time.sleep(2)
 
 def main():
+    saques_realizados = 0
+
     while True:
         opcao = menu_principal()
 
@@ -163,8 +248,66 @@ def main():
             listar_contas()
 
         elif opcao == "4":
-            print(line('ENTRAR NA CONTA'))
-            print('> Entrou no opção [4]')
+            print(line('ACESSAR CONTA'))
+            print()
+            cpf = input("Informe seu CPF: ")
+            usuario = buscar_usuario(cpf)
+
+            if not usuario:
+                print("❌ Nenhuma conta encontrada. Crie uma conta primeiro.")
+                input("\nPressione [ENTER] para continuar...")
+                continue
+            
+            tentativas = 0
+
+            while tentativas < TENTATIVAS_SENHA:
+                senha = input("Informe sua senha: ")
+                print()
+                if usuario['senha'] == senha:
+                    break
+                tentativas += 1
+
+                if tentativas < TENTATIVAS_SENHA:
+                    restantes = TENTATIVAS_SENHA - tentativas
+                    print(f"❌ Senha incorreta. Você ainda tem {restantes} tentativa{'s' if restantes > 1 else ''}.\n")
+                else:
+                    print("🚫 Acesso bloqueado por tentativas inválidas.")
+                    input("\nPressione [ENTER] para continuar...")
+                    usuario = None  # força o cancelamento do login
+                    break
+
+            if not usuario or tentativas == TENTATIVAS_SENHA:
+                continue
+            
+            conta = selecionar_conta(usuario)
+            if not conta:
+                continue
+
+            # Agora o usuário está logado
+            while True:
+                print()
+                opcao_conta = menu_conta(usuario, conta)
+                print(line())
+                print()
+
+                if opcao_conta == "1":
+                    exibir_extrato(conta)
+                elif opcao_conta == "2":
+                    depositar(conta)
+                elif opcao_conta == "3":
+                    if saques_realizados >= LIMITE_SAQUES:
+                        print("🚫 Limite de 3 saques por sessão atingido.")
+                        input("\nPressione [ENTER] para continuar...")
+                        continue
+                    sacar(conta)
+                    saques_realizados += 1
+
+                elif opcao_conta == "0":
+                    print(f"Saindo da conta {conta['numero']}...\n")
+                    break
+                else:
+                    print("❌ Opção inválida.")
+                    input("\nPressione [ENTER] para continuar...")
 
         else:
             print(f"Não existe opção {opcao}, por favor digite entre 0 a 4.")
@@ -172,7 +315,7 @@ def main():
         time.sleep(2)
         print()
 
-print('\nIniciando o sistema do banco... Aguarde...')
+print(f'\nIniciando o sistema do {BANCO_NAME}... Aguarde...')
 time.sleep(1)
 print()
 main()
