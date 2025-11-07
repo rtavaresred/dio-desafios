@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
 import time
 import textwrap
@@ -7,50 +7,48 @@ import textwrap
 # CONFIGURAÇÕES
 # ==========================================================
 BANCO_NAME = "Banco Dio"
-BANCO_VERSION = "v3.0.0"
+BANCO_VERSION = "v1.0.0"
 AGENCIA_PADRAO = "0001"
 LIMITE_SAQUES = 3
-
 
 # ==========================================================
 # CLASSES DO SISTEMA
 # ==========================================================
-class Historico:
-    def __init__(self):
-        self.transacoes = []
+class Cliente:
+    def __init__(self, endereco):
+        self._endereco = endereco
+        self._contas = []
+    
+    @property
+    def contas(self):
+        return self._contas
+    
+    def realizar_transacao(self, conta, transacao):
+        transacao.registrar(conta)
 
-    def adicionar_transacao(self, transacao):
-        self.transacoes.append({
-            "tipo": transacao.__class__.__name__,
-            "valor": transacao.valor,
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        })
-
-
-class Transacao(ABC):
-    @abstractmethod
-    def registrar(self, conta):
-        pass
+    def adicionar_conta(self, conta):
+        self._contas.append(conta)
 
 
-class Deposito(Transacao):
-    def __init__(self, valor):
-        self.valor = valor
+class PessoaFisica(Cliente):
+    def __init__(self, nome, cpf, data_nascimento, endereco, senha):
+        super().__init__(endereco)
+        self._nome = nome
+        self._cpf = cpf
+        self._data_nascimento = data_nascimento
+        self._senha = senha
 
-    def registrar(self, conta):
-        sucesso = conta.depositar(self.valor)
-        if sucesso:
-            conta.historico.adicionar_transacao(self)
+    @property
+    def nome(self):
+        return self._nome
 
+    @property
+    def cpf(self):
+        return self._cpf
 
-class Saque(Transacao):
-    def __init__(self, valor):
-        self.valor = valor
-
-    def registrar(self, conta):
-        sucesso = conta.sacar(self.valor)
-        if sucesso:
-            conta.historico.adicionar_transacao(self)
+    @property
+    def senha(self):
+        return self._senha
 
 
 class Conta:
@@ -105,30 +103,6 @@ class Conta:
         return cls(numero, cliente)
 
 
-# class ContaCorrente(Conta):
-#     def __init__(self, numero, cliente, limite=500, limite_saques=LIMITE_SAQUES):
-#         super().__init__(numero, cliente)
-#         self._limite = limite
-#         self._limite_saques = limite_saques
-#         self._saques_realizados = 0
-
-#     def sacar(self, valor):
-#         if self._saques_realizados >= self._limite_saques:
-#             print("🚫 Limite de saques atingido.")
-#             return False
-#         if valor <= 0:
-#             print("❌ Valor inválido para saque.")
-#             return False
-#         # agora valida saldo + limite
-#         if valor > (self._saldo + self._limite):
-#             print("🚫 Saldo + limite insuficiente.")
-#             return False
-
-#         self._saldo -= valor
-#         self._saques_realizados += 1
-#         print(f"✅ Saque de R$ {valor:.2f} realizado com sucesso!")
-#         return True
-
 class ContaCorrente(Conta):
     def __init__(self, numero, cliente, limite=3, limite_saques=LIMITE_SAQUES):
         super().__init__(numero, cliente)
@@ -152,41 +126,42 @@ class ContaCorrente(Conta):
         return sucesso
 
 
-class Cliente:
-    def __init__(self, endereco):
-        self._endereco = endereco
-        self._contas = []
+class Historico:
+    def __init__(self):
+        self.transacoes = []
 
-    @property
-    def contas(self):
-        return self._contas
-
-    def realizar_transacao(self, conta, transacao):
-        transacao.registrar(conta)
-
-    def adicionar_conta(self, conta):
-        self._contas.append(conta)
+    def adicionar_transacao(self, transacao):
+        self.transacoes.append({
+            "tipo": transacao.__class__.__name__,
+            "valor": transacao.valor,
+            "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        })
 
 
-class PessoaFisica(Cliente):
-    def __init__(self, nome, cpf, data_nascimento, endereco, senha):
-        super().__init__(endereco)
-        self._nome = nome
-        self._cpf = cpf
-        self._data_nascimento = data_nascimento
-        self._senha = senha
+class Transacao(ABC):
+    @abstractmethod
+    def registrar(self, conta):
+        pass
 
-    @property
-    def nome(self):
-        return self._nome
 
-    @property
-    def cpf(self):
-        return self._cpf
+class Saque(Transacao):
+    def __init__(self, valor):
+        self.valor = valor
 
-    @property
-    def senha(self):
-        return self._senha
+    def registrar(self, conta):
+        sucesso = conta.sacar(self.valor)
+        if sucesso:
+            conta.historico.adicionar_transacao(self)
+
+
+class Deposito(Transacao):
+    def __init__(self, valor):
+        self.valor = valor
+
+    def registrar(self, conta):
+        sucesso = conta.depositar(self.valor)
+        if sucesso:
+            conta.historico.adicionar_transacao(self)
 
 
 # ==========================================================
